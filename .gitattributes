@@ -1,0 +1,5 @@
+# Dokumenty i wyniki binarne musza zachowac oryginalne bajty na Windows.
+*.pdf binary
+*.png binary
+*.mat binary
+*.zip binary

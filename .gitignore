@@ -1,0 +1,7 @@
+# Pliki tymczasowe i lokalne ustawienia MATLAB-a/Pythona.
+tmp/
+__pycache__/
+*.pyc
+*.asv
+*.m~
+slprj/

@@ -1,0 +1,349 @@
+<!doctype html><html lang="pl"><meta charset="utf-8"><title>MNUM 1.8</title><style>body{font:16px/1.6 Arial;max-width:1000px;margin:40px auto;color:#182d3e} .HeadPL{font-size:28px;font-weight:bold}.SubPL{font-weight:bold}.EqPL{font:20px/1.7 Cambria,serif;background:#f1f5f8;padding:10px}.SmallPL{font-size:13px}td{padding:9px;border-bottom:1px solid #ccd6df}pre{font:12px/1.5 Consolas;background:#f5f5f5;padding:20px;white-space:pre-wrap}.page{break-before:page;border-top:1px solid #ccd6df;margin-top:45px}</style><div class="page"></div><p class="HeadPL">MNUM - projekt 1.8</p><p class="SubPL">Układy liniowe: LDL<sup>T</sup> i Gauss-Seidel.<br/>Aproksymacja wielomianowa: równania normalne i QR.</p><p class="BodyPL">Opracowanie do zadania <b>MNUM-P1-26Zv2-08.pdf</b>. Kod, wzory, samodzielne wyprowadzenia, eksperymenty i komentarze. Wyniki pochodzą z dołączonego uruchomienia MATLAB-a; czasy zależą od komputera i obciążenia.</p><p class="SubPL">Co wykorzystano z wykładów?</p><table><tr><td>Materiał Piotra Tatjewskiego</td><td>Slajdy / zastosowanie</td></tr><tr><td>MNUM_01_PojPodst_slajdy.pdf</td><td>8-12: reprezentacja, zaokrąglenia, double i eps. Podstawa interpretacji dokładności.</td></tr><tr><td>MNUM_02_RownLn_slajdy.pdf</td><td>1-5: normy; 8-11: uwarunkowanie; 12-13: podstawianie; 38-45: LLᵀ i LDLᵀ; 53-57: iteracje i Gauss-Seidel.</td></tr><tr><td>MNUM_03WartWl_slajdy.pdf</td><td>1-3: ortogonalność i wąski QR; 31-33: MNK, równania normalne, cond₂(AᵀA) i przejście do QR.</td></tr><tr><td>MNUM_04RownNln_slajdy.pdf</td><td>Nie jest potrzebny: projekt nie dotyczy równań nieliniowych.</td></tr><tr><td>GS.m - Andrzej Karbowski</td><td>Oryginalna procedura przekazana przez użytkownika. Komentarz wskazuje podręcznik P. Tatjewskiego, Metody Numeryczne, OWPW 2013, s. 59. Nie korzystano z treści podręcznika poza tym opisem.</td></tr></table><p class="SmallPL">Numery oznaczają strony PDF, zgodne z numeracją slajdów. Wyprowadzenia poniżej zapisano samodzielnie na podstawie tych wzorów. Dowody dominacji dla konkretnych macierzy, analiza kosztu, konwersja skali i komentarze do eksperymentów są uzupełnieniem opracowania.</p><p class="SmallPL">Materiały źródłowe: <link href="https://github.com/MateuszJakubiak591/MNUM_proj1" color="#235e84">github.com/MateuszJakubiak591/MNUM_proj1</link>. Kopie wykorzystanych PDF-ów znajdują się w folderze zrodla. Pełne listingi zebrano na końcu, oddzielnie od teorii.</p><div class="page"></div><p class="HeadPL">1. Rozkład LDLᵀ - wyprowadzenie</p><p class="BodyPL">Szukamy rozkładu rzeczywistej macierzy symetrycznej A = LDLᵀ. L jest dolna trójkątna, l<sub>ii</sub> = 1; D jest diagonalna. W kodzie d(i) przechowuje d<sub>ii</sub>. Oznaczenie L odpowiada macierzy jednostkowej dolnej z wykładu; nie jest to L z rozkładu Cholesky’ego LLᵀ.</p><p class="EqPL">a<sub>ji</sub> = (LDLᵀ)<sub>ji</sub> = ∑<sub>k=1</sub><sup>min(j,i)</sup> l<sub>jk</sub>d<sub>kk</sub>l<sub>ik</sub>.</p><p class="BodyPL">W i-tej kolumnie zaczynamy od j = i. Oddzielamy składnik k = i. Ponieważ l<sub>ii</sub> = 1, otrzymujemy:</p><p class="EqPL">a<sub>ii</sub> = ∑<sub>k=1</sub><sup>i−1</sup> l<sub>ik</sub>²d<sub>kk</sub> + d<sub>ii</sub>,</p><p class="EqPL"><b>d<sub>ii</sub> = a<sub>ii</sub> − ∑<sub>k=1</sub><sup>i−1</sup> l<sub>ik</sub>²d<sub>kk</sub>.</b></p><p class="BodyPL">Dla j &gt; i ostatni składnik sumy ma postać l<sub>ji</sub>d<sub>ii</sub>. Stąd:</p><p class="EqPL">a<sub>ji</sub> = ∑<sub>k=1</sub><sup>i−1</sup> l<sub>jk</sub>d<sub>kk</sub>l<sub>ik</sub> + l<sub>ji</sub>d<sub>ii</sub>,</p><p class="EqPL"><b>l<sub>ji</sub> = (a<sub>ji</sub> − ∑<sub>k=1</sub><sup>i−1</sup> l<sub>jk</sub>d<sub>kk</sub>l<sub>ik</sub>) / d<sub>ii</sub>.</b></p><p class="BodyPL">Pierwsza kolumna: d<sub>11</sub> = a<sub>11</sub>, l<sub>j1</sub> = a<sub>j1</sub>/d<sub>11</sub>. Następnie wyznaczamy kolumny i = 2,...,n. Puste sumy mają wartość zero. W kodzie wektor v<sub>k</sub> = d<sub>kk</sub>l<sub>ik</sub> pozwala wykonać te same sumy za pomocą mnożenia macierzy przez wektor.</p><p class="SubPL">Rozwiązanie układu po faktoryzacji</p><p class="EqPL">Ax = b ⇒ LDLᵀx = b ⇒ Ly = b, Dz = y, Lᵀx = z.</p><p class="EqPL">y<sub>i</sub> = b<sub>i</sub> − ∑<sub>j=1</sub><sup>i−1</sup> l<sub>ij</sub>y<sub>j</sub>,     i = 1,...,n;</p><p class="EqPL">z<sub>i</sub> = y<sub>i</sub>/d<sub>ii</sub>;</p><p class="EqPL">x<sub>i</sub> = z<sub>i</sub> − ∑<sub>j=i+1</sub><sup>n</sup> l<sub>ji</sub>x<sub>j</sub>,     i = n,...,1.</p><p class="SmallPL">Są to bezpośrednio równania wierszowe układów trójkątnych. W procedurze nie ma wywołań ldl, chol, inv ani operatora rozwiązującego układ. Dzielenie przez pojedynczy d<sub>ii</sub> jest zwykłym dzieleniem skalarnym. Źródło: wykład 02, slajdy 12 oraz 42-43.</p><div class="page"></div><p class="HeadPL">2. Stosowalność, koszt i dokładność</p><p class="BodyPL">Zgodnie z poleceniem solwer nie sprawdza symetrii, dodatniej określoności ani pivotów. Analizujemy je tutaj. Wersja bez przestawień wymaga niezerowych kolejnych d<sub>ii</sub>; sama nieosobliwość nie wystarcza. Przykład A = [0,1;1,0] jest nieosobliwy, ale pierwszy pivot wynosi zero. Dla macierzy symetrycznych dodatnio określonych wszystkie pivoty są dodatnie.</p><p class="SubPL">Macierz z zadania 1</p><p class="EqPL">a<sub>ij</sub> = 2(i+j)+1 (i ≠ j),   a<sub>ii</sub> = 4n²+(2i+4)n,   b<sub>i</sub> = 2.5+0.6i.</p><p class="EqPL">s<sub>i</sub> = ∑<sub>j≠i</sub>|a<sub>ij</sub>| = (2n−4)i+n²+2n−1,</p><p class="EqPL">a<sub>ii</sub>−s<sub>i</sub> = 3n²+4i+2n+1 &gt; 0.</p><p class="BodyPL">A jest symetryczna i ściśle diagonalnie dominująca z dodatnią przekątną. Dodatnią określoność można wykazać bez obliczania wartości własnych: z 2|x<sub>i</sub>x<sub>j</sub>| ≤ x<sub>i</sub>²+x<sub>j</sub>² wynika poniższe oszacowanie.</p><p class="EqPL">xᵀAx ≥ ∑<sub>i=1</sub><sup>n</sup> (a<sub>ii</sub>−s<sub>i</sub>)x<sub>i</sub>² &gt; 0,   x ≠ 0.</p><p class="EqPL">κ₂(A) ≤ (9n²+2n−1)/(3n²+2n+5) &lt; 3  (n ≥ 2).</p><p class="BodyPL">Ostatnia nierówność wynika z dolnego ograniczenia λ<sub>min</sub> przez min(a<sub>ii</sub>−s<sub>i</sub>) i górnego λ<sub>max</sub> przez max(a<sub>ii</sub>+s<sub>i</sub>). Są to dobrze uwarunkowane układy, mimo rosnących elementów macierzy.</p><p class="SubPL">Koszt procedury ogólnej</p><p class="EqPL">∑<sub>i=1</sub><sup>n</sup> (n−i)(i−1) = n(n−1)(n−2)/6.</p><p class="BodyPL">Tyle składników występuje w sumach dla elementów pod przekątną. Każdy wymaga mnożenia i dodawania; dochodzą operacje O(n²). Faktoryzacja ma więc koszt Θ(n³), każde podstawianie Θ(n²), pamięć Θ(n²). Przechowanie D jako wektora wymaga O(n). Czasy MATLAB-a zależą także od wektoryzacji, pamięci i bibliotek BLAS.</p><p class="SubPL">Co oznacza wymagany „błąd”?</p><p class="EqPL">r = Ax̃−b,   ε = ‖r‖₂,   ε<sub>rel</sub> = ‖r‖₂/‖b‖₂.</p><p class="EqPL">A(x̃−x*) = r ⇒ ‖x̃−x*‖₂/‖x*‖₂ ≤ κ₂(A) ‖r‖₂/‖b‖₂.</p><p class="BodyPL">ε jest normą reszty, a nie bezpośrednio odległością od dokładnego x*. Ostatnia nierówność wynika z normy A⁻¹ i ‖b‖₂ ≤ ‖A‖₂‖x*‖₂. Reszta bezwzględna rośnie także ze skalą b; nie musi być stałą wielokrotnością eps. W MATLAB-ie eps = 2⁻⁵² ≈ 2.220446·10⁻¹⁶; unit roundoff przy zaokrąglaniu double to u = 2⁻⁵³. Wykład 01, slajd 12, rozróżnia te pojęcia.</p><div class="page"></div><p class="HeadPL">3. Gauss-Seidel - wyprowadzenie</p><p class="BodyPL">W tej sekcji A = L + D + U, gdzie L i U są ściśle trójkątne, a D diagonalna. To inne macierze L,D niż w faktoryzacji LDLᵀ. Z równania Ax = b przenosimy Ux na prawą stronę, a do iteracji podstawiamy poprzednie przybliżenie:</p><p class="EqPL">(D+L)x<sup>(k+1)</sup> = b−Ux<sup>(k)</sup>.</p><p class="BodyPL">W i-tym równaniu składniki o indeksach j &lt; i są już wyznaczone w bieżącym przebiegu. Składniki o indeksach j &gt; i pochodzą z przebiegu poprzedniego:</p><p class="EqPL">x<sub>i</sub><sup>(k+1)</sup> = (b<sub>i</sub> − ∑<sub>j=1</sub><sup>i−1</sup> a<sub>ij</sub>x<sub>j</sub><sup>(k+1)</sup></p><p class="EqPL">                                      − ∑<sub>j=i+1</sub><sup>n</sup> a<sub>ij</sub>x<sub>j</sub><sup>(k)</sup>) / a<sub>ii</sub>.</p><p class="BodyPL">Oryginalny GS.m oblicza najpierw w = Ux−b, a następnie podstawia w przód. Startuje od x<sup>(0)</sup> = b. Iteracja oznacza pełny przebieg po i = 1,...,n, nie pojedynczą aktualizację składowej.</p><p class="EqPL">Stop: ‖x<sup>(k)</sup>−x<sup>(k−1)</sup>‖₂ ≤ δ  lub  k = itmax,</p><p class="EqPL">δ = 10⁻⁹,   itmax = 1000n.</p><p class="BodyPL">Zwracana liczba iexe to liczba pełnych przebiegów. texe jest czasem mierzonym wewnątrz GS.m; w tabeli podano również zewnętrzny czas całej operacji razem z obliczeniem reszty. Kryterium stopu bada zmianę przybliżenia, a nie bezpośrednio normę reszty.</p><p class="SubPL">Macierz z zadania 2 i zbieżność</p><p class="EqPL">a<sub>ii</sub> = 24.5,   a<sub>i,i±3</sub> = −5 (o ile indeks jest w zakresie),</p><p class="EqPL">a<sub>ij</sub> = 0 dla pozostałych,   b<sub>i</sub> = −6+0.5i.</p><p class="BodyPL">Suma modułów elementów poza przekątną nie przekracza 10, więc 24.5 &gt; 10. Macierz jest symetryczna dodatnio określona na mocy oszacowania z poprzedniej strony; GS jest zbieżny. Wartości własne leżą w [14.5,34.5], zatem κ₂(A) ≤ 34.5/14.5 ≈ 2.38.</p><p class="BodyPL">Dla błędu iteracji e<sup>(k)</sup> = x<sup>(k)</sup>−x* mamy (D+L)e<sup>(k+1)</sup> = −Ue<sup>(k)</sup>. Ogólny warunek zbieżności to promień spektralny macierzy iteracji mniejszy od 1 (wykład 02, slajd 53). Tutaj każdy wewnętrzny wiersz ma co najwyżej jeden poprzednik i jeden następnik o współczynniku 5. Indukcja po wierszach daje poniższą, niezależną od n, ocenę:</p><p class="EqPL">‖e<sup>(k+1)</sup>‖∞ ≤ q‖e<sup>(k)</sup>‖∞,   q ≤ 5/(24.5−5) ≈ 0.25641.</p><p class="BodyPL">Ta sama ocena dotyczy różnic kolejnych iteracji. Dla kryterium w normie 2 można dodatkowo użyć ‖v‖₂ ≤ √n‖v‖∞. Liczba iteracji może nieznacznie rosnąć z n i normą punktu startowego. Ogólna wersja GS.m na macierzy pełnej wykonuje Θ(kn²) działań i przechowuje Θ(n²) danych. Wersja świadoma pasma mogłaby osiągnąć Θ(kn), ale takiej optymalizacji nie wprowadzano do oryginału.</p><div class="page"></div><p class="HeadPL">4. Wielomiany i równania normalne</p><p class="BodyPL">Dla m = 11 par (x<sub>i</sub>,y<sub>i</sub>) wyznaczamy wielomiany stopni p = 3,5,7,9,10. Ustalamy kolejność współczynników zgodną z polyval:</p><p class="EqPL">f(x) = a<sub>p</sub>x<sup>p</sup> + a<sub>p−1</sub>x<sup>p−1</sup> + ... + a<sub>1</sub>x + a<sub>0</sub>,</p><p class="EqPL">a = [a<sub>p</sub>, a<sub>p−1</sub>, ..., a<sub>0</sub>]ᵀ,   V<sub>ij</sub> = x<sub>i</sub><sup>p−j+1</sup>,   j = 1,...,p+1.</p><p class="BodyPL">Macierz V to macierz projektu, na slajdach MNK oznaczana A. Użycie V odróżnia ją od macierzy układów z zadań 1-2. Jej ostatnia kolumna jest jedynkowa, a Va to wartości wielomianu w węzłach.</p><p class="EqPL">J(a) = ‖Va−y‖₂² = (Va−y)ᵀ(Va−y)</p><p class="EqPL">        = aᵀVᵀVa − 2aᵀVᵀy + yᵀy.</p><p class="BodyPL">Różniczkujemy względem wektora a. Ponieważ VᵀV jest symetryczna, gradient składnika kwadratowego wynosi 2VᵀVa, a liniowego −2Vᵀy:</p><p class="EqPL">∇J(a) = 2VᵀVa−2Vᵀy = 0 ⇒ <b>VᵀVa = Vᵀy.</b></p><p class="BodyPL">Dla dowolnego niezerowego z zachodzi zᵀVᵀVz = ‖Vz‖₂². Węzły są różne, a p ≤ 10. Niezerowy wielomian stopnia p nie może mieć 11 różnych zer, więc kolumny V są liniowo niezależne. Stąd VᵀV jest dodatnio określona, hesjan 2VᵀV dodatnio określony, a znaleziony punkt jest jedynym minimum globalnym.</p><p class="EqPL">G = VᵀV,   h = Vᵀy,   G = LDLᵀ,   Ga = h.</p><p class="BodyPL">Układ Ga = h rozwiązujemy dokładnie własnym solwerem z zadania 1. W arytmetyce zmiennopozycyjnej utworzenie G pogarsza dokładność: dla wartości szczególnych σ₁ ≥ ... ≥ σ<sub>p+1</sub> &gt; 0 macierzy V wartości własne VᵀV to ich kwadraty.</p><p class="EqPL">κ₂(VᵀV) = σ₁²/σ<sub>p+1</sub>² = κ₂(V)².</p><p class="BodyPL">To tożsamość dla macierzy dokładnej. W kolumnie cond_gram_computed_2 mierzona jest macierz G już zaokrąglona w MATLAB-ie; przy bardzo złym uwarunkowaniu nie musi spełniać tej równości numerycznie. Źródło równań normalnych i kwadratu uwarunkowania: wykład 03, slajdy 31-32.</p><p class="SubPL">Błędy aproksymacji</p><p class="EqPL">r<sub>i</sub> = polyval(a,x<sub>i</sub>)−y<sub>i</sub>,</p><p class="EqPL">E₂ = ‖r‖₂ = √(∑<sub>i=1</sub><sup>m</sup> r<sub>i</sub>²),   E∞ = ‖r‖∞ = max<sub>i</sub>|r<sub>i</sub>|.</p><p class="BodyPL">E₂ jest minimalizowane przez MNK; E∞ jest dodatkową miarą jakości i nie jest celem tej optymalizacji. Mała reszta układu Ga = h nie oznacza małego błędu aproksymacji E₂. Są to dwa różne problemy i dwie różne reszty.</p><div class="page"></div><p class="HeadPL">5. QR, skalowanie i obliczanie wartości</p><p class="BodyPL">Stosujemy wąski, znormalizowany rozkład V = QR, gdzie Q ma m wierszy i p+1 kolumn, QᵀQ = I, a R jest kwadratowa górna trójkątna. W MATLAB-ie odpowiada mu [Q,R] = qr(V,0).</p><p class="EqPL">VᵀVa = Vᵀy ⇒ RᵀQᵀQRa = RᵀQᵀy ⇒ RᵀRa = RᵀQᵀy.</p><p class="BodyPL">R jest nieosobliwa, więc lewostronne skrócenie przez Rᵀ daje:</p><p class="EqPL"><b>Ra = Qᵀy.</b></p><p class="BodyPL">To wyprowadzenie algebraiczne nie oznacza tworzenia równań normalnych w kodzie QR. Kod oblicza Q,R bez tworzenia VᵀV, a następnie rozwiązuje układ trójkątny własnym podstawianiem:</p><p class="EqPL">a<sub>i</sub> = (c<sub>i</sub> − ∑<sub>j=i+1</sub><sup>p+1</sup> R<sub>ij</sub>a<sub>j</sub>)/R<sub>ii</sub>,   c = Qᵀy.</p><p class="BodyPL">Niezależne wyjaśnienie geometryczne: Va należy do przestrzeni kolumn Q, a (I−QQᵀ)y jest do niej prostopadły. Twierdzenie Pitagorasa daje:</p><p class="EqPL">‖Va−y‖₂² = ‖Ra−Qᵀy‖₂² + ‖(I−QQᵀ)y‖₂².</p><p class="BodyPL">Drugi składnik nie zależy od a; pierwszy ma minimum zero dla Ra = Qᵀy. Ponieważ Q zachowuje długości wektorów, V i R mają te same wartości szczególne, zatem κ₂(R) = κ₂(V). QR unika kwadratu wskaźnika uwarunkowania. Źródło: wykład 03, slajdy 1-3 i 33.</p><p class="SubPL">Dodatkowy eksperyment: przeskalowanie zmiennej</p><p class="EqPL">t = (x−μ)/s,   μ = (min(x)+max(x))/2,   s = max<sub>i</sub>|x<sub>i</sub>−μ|.</p><p class="BodyPL">Tutaj μ = 0, s = 10, więc t = x/10 ∈ [−1,1]. Rozwiązujemy ten sam problem w bazie potęg t. Przestrzeń wielomianów się nie zmienia, zatem w dokładnej arytmetyce nie zmienia się optymalna funkcja. Zmieniają się skale kolumn i błędy numeryczne.</p><p class="EqPL">g(t) = ∑<sub>k=0</sub><sup>p</sup> c<sub>k</sub>t<sup>k</sup>,   f(x) = g((x−μ)/s),</p><p class="EqPL">a<sub>j</sub> = ∑<sub>k=j</sub><sup>p</sup> c<sub>k</sub>s<sup>−k</sup> (k nad j) (−μ)<sup>k−j</sup>;   μ = 0 ⇒ a<sub>j</sub> = c<sub>j</sub>/s<sup>j</sup>.</p><p class="BodyPL">Wzór wynika z dwumianu Newtona dla (x−μ)<sup>k</sup>. Implementacja dokonuje tej konwersji przez składanie wielomianów w schemacie Hornera, dlatego zawsze zwraca a dla oryginalnego x. Do oceny wartości używa polyval(a,x), także do błędów w tabelach.</p><p class="EqPL">f(x) = (...((a<sub>p</sub>x+a<sub>p−1</sub>)x+a<sub>p−2</sub>)x+...)+a<sub>0</sub>.</p><p class="BodyPL">Horner wynika z kolejnego wyłączania x przed nawias. Wymaga p mnożeń i p dodawań na punkt. Krzywe rysujemy w 1001 punktach od −10 do 10: krok 0.02 wobec kroku 2 danych, czyli 100 razy gęściej niż próbki. Skalowanie, konwersja i powyższe wyprowadzenie Hornera są uzupełnieniem opracowania.</p><div class="page"></div><p class="HeadPL">6. Pomiary - zadanie 1</p><p class="BodyPL">Środowisko: MATLAB 25.2.0.3042426 (R2025b) Update 1, PCWIN64. Zapis uruchomienia: 2026-11-14 16:28:22 (czas lokalny). Typ danych double; eps = 2.220446049250313e-16.</p><p class="BodyPL">Po wstępnej rozgrzewce solwerów dla każdego n wykonano trzy pomiary zewnętrznym tic/toc; tabela pokazuje medianę. Czas obejmuje faktoryzację, rozwiązanie i obliczenie reszty, a wyklucza tworzenie danych, drukowanie i rysowanie. Nie jest to sam czas faktoryzacji. Reszta jest wynikiem ostatniego powtórzenia.</p><table><tr><td>n</td><td>czas LDLᵀ [s]</td><td>ε = ‖Ax̃−b‖₂</td><td>ε / ‖b‖₂</td></tr><tr><td>50</td><td>0.000842</td><td>1.901e-14</td><td>1.358e-16</td></tr><tr><td>100</td><td>0.002202</td><td>9.236e-14</td><td>2.490e-16</td></tr><tr><td>250</td><td>0.006844</td><td>4.882e-13</td><td>3.468e-16</td></tr><tr><td>500</td><td>0.030884</td><td>1.968e-12</td><td>5.010e-16</td></tr><tr><td>1000</td><td>0.540484</td><td>7.440e-12</td><td>6.744e-16</td></tr><tr><td>1500</td><td>1.942929</td><td>1.614e-11</td><td>7.982e-16</td></tr><tr><td>2000</td><td>4.447869</td><td>2.911e-11</td><td>9.363e-16</td></tr></table><img src="wyniki/zadanie1.png" style="width:100%"><p class="BodyPL">Reszty bezwzględne mieszczą się w zakresie 1.901e-14 do 2.911e-11. Są małymi ułamkami; reszty względne są rzędu 9.363e-16 lub mniejsze. Z oszacowania κ₂(A)&lt;3 wynika mały błąd względny rozwiązania. Rosnąca reszta bezwzględna nie oznacza pogarszania uwarunkowania.</p><p class="BodyPL">Czas dla n=2000 wyniósł 4.448 s wobec 0.000842 s dla n=50. Oczekiwany koszt jest sześcienny; nie należy dopasowywać dokładnie n³ do krótkich czasów zdominowanych przez narzuty, JIT i zmiany sprawności operacji pamięciowych.</p><div class="page"></div><p class="HeadPL">7. Pomiary - zadanie 2</p><p class="BodyPL">Obie metody otrzymują tę samą pełną macierz (full). Nie wykorzystano sparse ani specjalnego algorytmu pasmowego. Dzięki temu porównanie dotyczy podanych implementacji. Pomimo wielu zer ogólny LDLᵀ wykonuje mnożenia pełnych fragmentów macierzy.</p><table><tr><td>n</td><td>LDLᵀ [s]</td><td>ε LDLᵀ</td><td>GS [s]</td><td>ε GS</td><td>iteracje</td></tr><tr><td>50</td><td>0.000895</td><td>1.126e-14</td><td>0.002334</td><td>2.442e-09</td><td>19</td></tr><tr><td>100</td><td>0.001893</td><td>3.452e-14</td><td>0.004566</td><td>4.403e-09</td><td>20</td></tr><tr><td>250</td><td>0.007092</td><td>1.751e-13</td><td>0.015829</td><td>1.382e-09</td><td>22</td></tr><tr><td>500</td><td>0.028527</td><td>5.398e-13</td><td>0.033788</td><td>4.118e-09</td><td>22</td></tr><tr><td>1000</td><td>0.534408</td><td>1.634e-12</td><td>0.091392</td><td>3.060e-09</td><td>23</td></tr><tr><td>1500</td><td>1.919933</td><td>2.824e-12</td><td>0.183050</td><td>1.453e-09</td><td>24</td></tr><tr><td>2000</td><td>4.391299</td><td>4.113e-12</td><td>0.302027</td><td>2.246e-09</td><td>24</td></tr></table><img src="wyniki/zadanie2.png" style="width:100%"><p class="BodyPL">GS wykonał od 19 do 24 iteracji, znacznie mniej niż limit 1000n. Odpowiada to silnej dominacji diagonalnej i ocenie kontrakcji niezależnej od n. Nie ma powodu oczekiwać liczby iteracji proporcjonalnej do liczby równań.</p><p class="BodyPL">Maksymalna reszta LDLᵀ to 4.113e-12, a GS 4.403e-09. GS kończy po osiągnięciu δ dla zmiany iteratów, dlatego jego reszta jest większa niż metody bezpośredniej i nie musi wynosić δ. Obie metody prowadzą do bliskich rozwiązań; największa norma ich różnicy wyniosła 3.008e-10.</p><p class="BodyPL">Przy n=2000 zmierzono 4.391 s dla LDLᵀ oraz 0.302 s dla GS (stosunek LDLᵀ/GS = 14.54). Dla macierzy pełnej GS ma koszt Θ(kn²), a LDLᵀ Θ(n³). Porównanie czasów dla małych n może być zaburzone narzutem pętli i przygotowania D,L,U.</p><p class="SmallPL">W pliku zadanie2.csv dodatkowo zapisano czas texe zwracany przez GS.m. Nie obejmuje on obliczenia reszty na zewnątrz; dlatego wykresy i główna tabela używają porównywalnych zewnętrznych pomiarów. Pełne dane liczbowe i różnice rozwiązań są dostępne w CSV, MAT i JSON.</p><div class="page"></div><p class="HeadPL">8. Pomiary - aproksymacja</p><p class="BodyPL">Dane: x = −10,−8,...,10; y = [−5.460, −3.880, −1.969, −1.666, −0.076, −0.397, −1.030, −4.548, −11.528, −21.641, −34.445]. E₂ i E∞ są liczone wyłącznie w tych 11 punktach.</p><p class="SubPL">Wariant podstawowy: bez skalowania, V w potęgach x</p><table><tr><td>p</td><td>E₂ normalne</td><td>E∞ normalne</td><td>E₂ QR</td><td>E∞ QR</td><td>κ₂(V)</td></tr><tr><td>3</td><td>1.439e+00</td><td>6.772e-01</td><td>1.439e+00</td><td>6.772e-01</td><td>7.382e+02</td></tr><tr><td>5</td><td>8.504e-01</td><td>4.645e-01</td><td>8.504e-01</td><td>4.645e-01</td><td>8.624e+04</td></tr><tr><td>7</td><td>7.071e-01</td><td>4.449e-01</td><td>7.071e-01</td><td>4.449e-01</td><td>1.001e+07</td></tr><tr><td>9</td><td>5.151e-01</td><td>3.020e-01</td><td>5.151e-01</td><td>3.020e-01</td><td>1.173e+09</td></tr><tr><td>10</td><td>5.946e-10</td><td>3.437e-10</td><td>2.803e-13</td><td>2.238e-13</td><td>1.523e+10</td></tr></table><p class="SubPL">Wariant dodatkowy: skalowanie t = x/10</p><table><tr><td>p</td><td>E₂ normalne</td><td>E∞ normalne</td><td>E₂ QR</td><td>E∞ QR</td><td>κ₂(V)</td></tr><tr><td>3</td><td>1.439e+00</td><td>6.772e-01</td><td>1.439e+00</td><td>6.772e-01</td><td>7.104e+00</td></tr><tr><td>5</td><td>8.504e-01</td><td>4.645e-01</td><td>8.504e-01</td><td>4.645e-01</td><td>3.920e+01</td></tr><tr><td>7</td><td>7.071e-01</td><td>4.449e-01</td><td>7.071e-01</td><td>4.449e-01</td><td>2.713e+02</td></tr><tr><td>9</td><td>5.151e-01</td><td>3.020e-01</td><td>5.151e-01</td><td>3.020e-01</td><td>2.887e+03</td></tr><tr><td>10</td><td>1.485e-09</td><td>9.081e-10</td><td>3.109e-13</td><td>2.700e-13</td><td>1.395e+04</td></tr></table><p class="BodyPL">Dla p=10 liczba współczynników jest równa liczbie danych. W dokładnej arytmetyce otrzymujemy wielomian interpolacyjny i zerową resztę. Pozostałe reszty są skutkiem zaokrągleń. To nie dowodzi dobrej jakości modelu pomiędzy węzłami ani poza zakresem danych.</p><p class="BodyPL">Przestrzenie wielomianów są zagnieżdżone, więc minimalny E₂ w dokładnej arytmetyce nie może rosnąć ze stopniem. E∞ nie ma analogicznej gwarancji dla rozwiązań MNK. Różnice między normalnymi a QR przy wysokich stopniach należy wiązać przede wszystkim z uwarunkowaniem i arytmetyką, nie z innym celem optymalizacji.</p><p class="SubPL">Czasy [µs] - mediany z 201 wywołań po rozgrzewce</p><table><tr><td>p</td><td>normalne, x</td><td>QR, x</td><td>normalne, x/10</td><td>QR, x/10</td></tr><tr><td>3</td><td>78.70</td><td>41.10</td><td>86.50</td><td>44.70</td></tr><tr><td>5</td><td>134.30</td><td>62.00</td><td>122.50</td><td>57.40</td></tr><tr><td>7</td><td>185.40</td><td>80.40</td><td>142.70</td><td>60.80</td></tr><tr><td>9</td><td>187.90</td><td>75.70</td><td>170.90</td><td>70.00</td></tr><tr><td>10</td><td>200.90</td><td>80.80</td><td>165.10</td><td>67.20</td></tr></table><p class="BodyPL">Mierzono całą poly_lsq: budowę V, rozwiązanie, konwersję współczynników i obliczenie błędów. Kolejność wywołań obu metod zmieniano naprzemiennie. Dla tak małych macierzy narzuty funkcji są istotne, a wbudowane QR korzysta ze zoptymalizowanych bibliotek. Nie można na tej podstawie twierdzić, że jedna metoda zawsze jest szybsza.</p><div class="page"></div><p class="HeadPL">9. Otrzymane funkcje na tle danych</p><p class="BodyPL">Wariant wymagany: bez skalowania. Każdy panel przedstawia osobny stopień, dane pomiarowe oraz obie metody. Nakładanie się krzywych oznacza zbliżone dopasowanie w skali rysunku, nie identyczność wszystkich cyfr współczynników.</p><img src="wyniki/zadanie3_skala0.png" style="width:100%"><p class="BodyPL">Krzywe obliczono funkcją polyval w 1001 punktach. Szczególnie dla p=9 i p=10 dopasowanie w węzłach może współistnieć z wyraźnymi oscylacjami między nimi. Wysoki stopień zwiększa swobodę modelu; nie ma danych walidacyjnych, które pozwalałyby ocenić błąd względem nieznanej funkcji rzeczywistej.</p><p class="SubPL">Jak czytać współczynniki?</p><p class="BodyPL">Pełne wektory wszystkich stopni i obu metod zapisano w wyniki/wspolczynniki.txt z 17 cyframi znaczącymi. Kolejność to [a_p,...,a_0]. Na kolejnych stronach podano wybrane wartości oraz wszystkie wektory QR po skalowaniu. Nie są to współczynniki w zmiennej t: kod przelicza je na oryginalne x.</p><div class="page"></div><p class="HeadPL">10. Wpływ skalowania i uwarunkowania</p><img src="wyniki/zadanie3_skala1.png" style="width:100%"><p class="SubPL">Porównanie wskaźników uwarunkowania</p><table><tr><td>p</td><td>κ₂(V), potęgi x</td><td>κ₂(V), potęgi x/10</td><td>κ₂(V)², baza x</td></tr><tr><td>3</td><td>7.382e+02</td><td>7.104e+00</td><td>5.450e+05</td></tr><tr><td>5</td><td>8.624e+04</td><td>3.920e+01</td><td>7.437e+09</td></tr><tr><td>7</td><td>1.001e+07</td><td>2.713e+02</td><td>1.002e+14</td></tr><tr><td>9</td><td>1.173e+09</td><td>2.887e+03</td><td>1.375e+18</td></tr><tr><td>10</td><td>1.523e+10</td><td>1.395e+04</td><td>2.320e+20</td></tr></table><p class="BodyPL">W bazie x najwyższa potęga dla p=10 osiąga 10¹⁰, podczas gdy kolumna stała ma wartość 1. W bazie x/10 potęgi mają moduł nie większy niż 1. Skalowanie ogranicza różnice wielkości kolumn i zmniejsza uwarunkowanie, ale nie usuwa wszystkich problemów bazy jednomianowej. Dla większych stopni można rozważać bazy ortogonalne; nie jest to część wymaganego projektu.</p><p class="BodyPL">W tym uruchomieniu dla p=10 reszta normalnych po skalowaniu wyniosła 1.485e-09, wobec 5.946e-10 bez skalowania, czyli była większa mimo znacznie mniejszego κ₂(V). Wskaźnik uwarunkowania opisuje wrażliwość w najgorszym przypadku, a nie gwarantowaną resztę konkretnego obliczenia. Zmieniają się zaokrąglenia przy tworzeniu G, faktoryzacji i ocenie wielomianu; nie wolno deklarować automatycznej poprawy każdej mierzonej reszty.</p><div class="page"></div><p class="HeadPL">11. Błędy i koszty aproksymacji</p><img src="wyniki/zadanie3_bledy_czasy.png" style="width:100%"><p class="BodyPL">Normalne i QR rozwiązują to samo zadanie MNK. Gdy reszta dopasowania jest znacznie większa od błędów zaokrągleń, obie metody dają niemal ten sam E₂. Przy interpolacji p=10 te błędy stają się widoczne, bo teoretyczna reszta wynosi zero.</p><p class="BodyPL">Dla m punktów i q=p+1 współczynników utworzenie V kosztuje O(mq). Równania normalne wymagają O(mq²) na VᵀV i O(q³) na LDLᵀ. Wąski QR ma koszt O(mq²) dla m≥q. Obie metody mają więc podobny rząd kosztu, lecz różne stałe i własności numeryczne. QR jest zwykle bezpieczniejszym wyborem przy źle uwarunkowanej macierzy projektu.</p><div class="page"></div><p class="HeadPL">12. Współczynniki i wnioski</p><p class="SubPL">Wielomiany QR po skalowaniu - współczynniki dla x</p><p class="SmallPL"><b>p = 3</b>: [-0.01148611111, -0.2001736597, -0.3247525253, 0.1305827506]</p><p class="SmallPL"><b>p = 5</b>: [6.924078526e-05, -0.0001076995921, -0.02025661058, -0.1894037005, -0.1135219697, 0.006512820513]</p><p class="SmallPL"><b>p = 7</b>: [-8.841492326e-07, 5.165951797e-06, 0.0002215864992, -0.0008872886815, -0.02749372447, -0.161120584, -0.03111283104, -0.1377581242]</p><p class="SmallPL"><b>p = 9</b>: [-1.257356512e-07, 8.459768399e-08, 2.48546782e-05, -1.094144723e-05, -0.001460845269, 3.615360686e-05, 0.01140390212, -0.1773854204, -0.2623005952, -0.09501355301]</p><p class="SmallPL"><b>p = 10</b>: [5.95830147e-08, -1.257356512e-07, -1.271007074e-05, 2.48546782e-05, 0.0009001186343, -0.001460845269, -0.02492050385, 0.01140390212, 0.04707830853, -0.2623005952, -0.397]</p><p class="SubPL">Wnioski końcowe</p><p class="BodyPL">1. Własny LDLᵀ rozwiązuje oba typy dobrze uwarunkowanych układów z małymi resztami. Ogólna faktoryzacja bez pivotingu jest uzasadniona dodatnią określonością badanych macierzy, a nie samym faktem ich nieosobliwości.</p><p class="BodyPL">2. GS jest zbieżny dzięki silnej dominacji diagonalnej. Dla rosnącego n wykonuje niewiele iteracji w porównaniu z dopuszczonym limitem. Mniejszy koszt uzyskuje przy dokładności określonej przez δ; nie ma tej samej reszty co metoda bezpośrednia.</p><p class="BodyPL">3. Obie metody MNK minimalizują tę samą sumę kwadratów. Normalne wzmacniają problem uwarunkowania przez kwadrat κ₂(V). QR nie tworzy VᵀV, dlatego lepiej zachowuje dokładność, szczególnie przy wysokich stopniach.</p><p class="BodyPL">4. Skalowanie x do [−1,1] poprawia uwarunkowanie bez zmiany przestrzeni aproksymujących funkcji. Nie gwarantuje mniejszej reszty w każdym obliczeniu. Stopień 10 interpoluje 11 danych, ale zerowa reszta w próbkach nie stanowi dowodu najlepszego modelu. Bez założeń o błędach pomiarów i zbioru walidacyjnego nie można wskazać stopnia najlepszego do przewidywania.</p><p class="SubPL">Uruchomienie i weryfikacja</p><p class="BodyPL">W MATLAB-ie przejdź do folderu kod i wykonaj <b>results = run_project;</b>. Skrypt najpierw wywoła test_solvers, a potem odtworzy pomiary, wykresy, CSV, JSON i MAT. Sam PDF można odbudować skryptem generuj_sprawozdanie.py po ponownym uruchomieniu eksperymentów.</p><p class="BodyPL">Testy porównują własny LDLᵀ z rozwiązaniem referencyjnym A&#92;b poza solwerem, kontrolują odtworzenie A = LDLᵀ oraz znany wielomian. Obejmują n=1, macierze losowe dodatnio określone, macierz nieokreśloną z niezerowymi pivotami i konwersję skali na niesymetrycznej dziedzinie. Wszystkie testy zakończyły się poprawnie.</p><p class="SmallPL">Plik GS.m zachowano bez zmian obliczeniowych. Rysunki i drukowanie znajdują się poza solwerami. Wywołanie wbudowanego QR występuje jedynie w dozwolonej gałęzi aproksymacji; gotowe rozwiązanie układu jest używane tylko jako odniesienie w osobnym pliku testowym.</p><div class="page"></div><p class="HeadPL">Listing: ldlt_solve.m</p><pre>  1  function [x, epsilon, L, d] = ldlt_solve(A, b)
+  2  %LDLT_SOLVE Rozwiazanie Ax=b przez wlasna faktoryzacje A=L*D*L&#x27;.
+  3  % A - rzeczywista macierz symetryczna z niezerowymi pivotami LDLT.
+  4  % b - wektor prawej strony; x - rozwiazanie kolumnowe.
+  5  % epsilon = norm(A*x-b,2); L - dolna trojkatna z jedynkami na diagonali.
+  6  % d(i) = d_ii, czyli D=diag(d). Bez testow stosowalnosci i bez pivotingu.
+  7  % W szczegolnosci procedura dziala dla macierzy dodatnio okreslonych.
+  8  % Nie uzywa ldl, chol, inv, mldivide ani innych gotowych solwerow.
+  9  n = size(A, 1);
+ 10  b = b(:);
+ 11  L = eye(n);
+ 12  d = zeros(n, 1);
+ 13  
+ 14  % Faktoryzacja kolumnowa: wzory ze slajdow 42-43 wykladu 02.
+ 15  for i = 1:n
+ 16      k = 1:i-1;
+ 17      v = d(k,1) .* L(i,k).&#x27;;
+ 18      d(i) = A(i,i) - L(i,k)*v;
+ 19      if i &lt; n
+ 20          L(i+1:n,i) = (A(i+1:n,i) - L(i+1:n,k)*v) / d(i);
+ 21      end
+ 22  end
+ 23  
+ 24  % Podstawianie w przod: L*y=b, l_ii=1.
+ 25  y = zeros(n, 1);
+ 26  for i = 1:n
+ 27      y(i) = b(i) - L(i,1:i-1)*y(1:i-1,1);
+ 28  end
+ 29  
+ 30  % Uklad diagonalny D*z=y (dzielenie skalarne, nie macierzowe).
+ 31  z = y ./ d;
+ 32  
+ 33  % Podstawianie wstecz: L&#x27;*x=z, l_ii=1.
+ 34  x = zeros(n, 1);
+ 35  for i = n:-1:1
+ 36      x(i) = z(i) - L(i+1:n,i).&#x27;*x(i+1:n,1);
+ 37  end
+ 38  epsilon = norm(A*x-b, 2);
+ 39  end</pre><div class="page"></div><p class="HeadPL">Listing: back_substitution.m</p><pre>  1  function a = back_substitution(R, c)
+  2  %BACK_SUBSTITUTION Wlasne podstawianie wstecz dla R*a=c.
+  3  % R - nieosobliwa macierz gorna trojkatna, c - wektor kolumnowy.
+  4  n = size(R, 1);
+  5  a = zeros(n, 1);
+  6  for i = n:-1:1
+  7      a(i) = (c(i) - R(i,i+1:n)*a(i+1:n,1)) / R(i,i);
+  8  end
+  9  end</pre><div class="page"></div><p class="HeadPL">Listing: poly_lsq.m</p><pre>  1  function [a, e2, einf, info] = poly_lsq(x, y, p, metoda, skala)
+  2  %POLY_LSQ Uniwersalna aproksymacja wielomianem stopnia p.
+  3  % metoda: &#x27;normal&#x27; -&gt; rownania normalne i wlasny LDLT;
+  4  %         &#x27;qr&#x27;     -&gt; ekonomiczny qr(V,0) i wlasne podstawianie.
+  5  % skala=false (domyslnie): baza 1,x,...,x^p;
+  6  % skala=true: t=(x-mu)/s, lepsze uwarunkowanie bazy.
+  7  % a jest ZAWSZE wektorem [a_p;...;a_0] w oryginalnej zmiennej x.
+  8  % polyval(a,x) daje wartosci; e2 i einf liczone w wezlach pomiarowych.
+  9  % info.c - wspolczynniki w zmiennej t; info.mu i info.s - przeskalowanie.
+ 10  % info.epsilon_normal - reszta ukladu normalnego (nie blad aproksymacji).
+ 11  if nargin &lt; 5, skala = false; end
+ 12  x = x(:); y = y(:);
+ 13  m = numel(x);
+ 14  if numel(y) ~= m || p &lt; 0 || p ~= fix(p) || p &gt;= m
+ 15      error(&#x27;poly_lsq:dane&#x27;, &#x27;Wymagane: tyle samo x,y oraz 0&lt;=p&lt;liczba probek.&#x27;);
+ 16  end
+ 17  mu = 0; s = 1;
+ 18  if skala
+ 19      mu = (min(x)+max(x))/2;
+ 20      s = max(abs(x-mu));
+ 21      if s == 0, s = 1; end
+ 22  end
+ 23  t = (x-mu)/s;
+ 24  
+ 25  % Macierz V (oznaczenie A z wykladu 03), kolejnosc dla polyval.
+ 26  V = ones(m, p+1);
+ 27  for j = p:-1:1
+ 28      V(:,j) = t .* V(:,j+1);
+ 29  end
+ 30  epsilon_normal = NaN;
+ 31  switch lower(metoda)
+ 32      case &#x27;normal&#x27;
+ 33          G = V.&#x27;*V;
+ 34          h = V.&#x27;*y;
+ 35          [c, epsilon_normal] = ldlt_solve(G, h);
+ 36      case &#x27;qr&#x27;
+ 37          [Q, R] = qr(V, 0);
+ 38          c = back_substitution(R, Q.&#x27;*y);
+ 39      otherwise
+ 40          error(&#x27;poly_lsq:metoda&#x27;, &#x27;Metoda musi byc normal albo qr.&#x27;);
+ 41  end
+ 42  
+ 43  % Przejscie c(t) -&gt; a(x) przez schemat Hornera i skladanie wielomianow.
+ 44  a = c(1);
+ 45  for j = 2:p+1
+ 46      a = conv(a(:).&#x27;, [1/s, -mu/s]);
+ 47      a(end) = a(end) + c(j);
+ 48  end
+ 49  a = a(:);
+ 50  r = polyval(a, x) - y;
+ 51  e2 = norm(r, 2);
+ 52  einf = norm(r, inf);
+ 53  info = struct(&#x27;c&#x27;,c,&#x27;mu&#x27;,mu,&#x27;s&#x27;,s,&#x27;epsilon_normal&#x27;,epsilon_normal);
+ 54  end</pre><div class="page"></div><p class="HeadPL">Listing: GS.m</p><p class="SmallPL">Autor: Andrzej Karbowski. Kod źródłowy przekazany przez użytkownika; zachowano oryginalną implementację.</p><pre>  1  function [xf, iexe, texe]=GS(A,b,delta,imax)
+  2  %
+  3  %   CEL, ALGORYTM 
+  4  %       Rozwiazanie ukladu rownan liniowych Ax=b 
+  5  %       iteracyjna metoda Gaussa-Seidela. 
+  6  %       Implementacja wedlug podrecznika Piotra Tatjewskiego 
+  7  %      &quot;Metody Numeryczne&quot;, OWPW 2013, str. 59.
+  8  %  
+  9  %   PARAMETRY WEJSCIOWE
+ 10  %       A        -  macierz kwadratowa zdominowana diagonalnie
+ 11  %                      lub symetryczna, dodatnio okreslona
+ 12  %       b        -  wektor kolumnowy prawych stron 
+ 13  %       delta  -  dokladnosc  
+ 14  %       imax  -  maksymalna liczba iteracji
+ 15  %
+ 16  %   PARAMETRY WYJSCIOWE
+ 17  %       xf       -  rozwiazanie 
+ 18  %       iexe  -  liczba iteracji wykonanych
+ 19  %       texe  -  czas obliczen [s]
+ 20  %
+ 21  %   PRZYKLADOWE WYWOLANIE
+ 22  %       &gt;&gt; G=rand(5)  
+ 23  %       &gt;&gt; A=G*G&#x27; 
+ 24  %       &gt;&gt; b=rand(5,1)  
+ 25  %       &gt;&gt; [xf, iexe, texe] = GS(A, b, 1e-8, 5000)
+ 26  %       &gt;&gt; norm(A*xf-b)
+ 27  %
+ 28  %   AUTOR, PROJEKT  
+ 29  %       Andrzej Karbowski, 
+ 30  %       Projekt z &quot;Metod numerycznych&quot; MNUM, 
+ 31  %       WEiTI PW
+ 32  %
+ 33  tic;
+ 34  D=diag(diag(A));
+ 35  U=triu(A)-D;
+ 36  L=tril(A)-D;
+ 37  n=size(b,1);
+ 38  x=b; xold=0;k=0;
+ 39  while norm(xold-x) &gt; delta &amp; k &lt; imax 
+ 40      xold=x; k=k+1;
+ 41      w=U*x-b;
+ 42      for i=1:n
+ 43         x(i)=(-L(i,1:i-1)*x(1:i-1)-w(i))/D(i,i);
+ 44      end
+ 45  end
+ 46  texe=toc; iexe =k; xf=x;</pre><div class="page"></div><p class="HeadPL">Listing: test_solvers.m</p><pre>  1  function test_solvers
+  2  %TEST_SOLVERS Sprawdzenie niezalezne od benchmarku; gotowy A\b tylko tutaj.
+  3  rng(8);
+  4  for n = [1, 2, 7, 23]
+  5      B = randn(n);
+  6      A = B*B.&#x27; + eye(n);
+  7      b = randn(n,1);
+  8      [x, e, L, d] = ldlt_solve(A,b);
+  9      assert(norm(A-L*diag(d)*L.&#x27;,&#x27;fro&#x27;)/norm(A,&#x27;fro&#x27;) &lt; 1e-13);
+ 10      assert(norm(x-A\b)/max(1,norm(x)) &lt; 1e-12);
+ 11      assert(e/max(1,norm(b)) &lt; 1e-12);
+ 12  end
+ 13  % Macierz symetryczna nieokreslona z niezerowymi pivotami.
+ 14  A = [2,1;1,-2]; b = [1;3];
+ 15  x = ldlt_solve(A,b);
+ 16  assert(norm(A*x-b) &lt; 1e-13);
+ 17  
+ 18  % Znany wielomian i niesymetryczna dziedzina: sprawdza konwersje skali.
+ 19  x = linspace(2,8,15).&#x27;; a0 = [2;-3;4;-1]; y = polyval(a0,x);
+ 20  for scaled = [false,true]
+ 21      for method = {&#x27;normal&#x27;,&#x27;qr&#x27;}
+ 22          [a,e2] = poly_lsq(x,y,3,method{1},scaled);
+ 23          assert(norm(a-a0)/norm(a0) &lt; 1e-7);
+ 24          assert(e2/norm(y) &lt; 1e-10);
+ 25      end
+ 26  end
+ 27  % Porownanie z wbudowanym MNK tylko w niezaleznym tescie.
+ 28  x = (-10:2:10).&#x27;; y = sin(x);
+ 29  for p = [3,5,7,9,10]
+ 30      [a,~,~,info] = poly_lsq(x,y,p,&#x27;qr&#x27;,true);
+ 31      V = x .^ (p:-1:0);
+ 32      aref = V\y;
+ 33      assert(norm(polyval(a,x)-polyval(aref,x)) &lt; 1e-7);
+ 34      assert(norm(polyval(a,x)-polyval(info.c,(x-info.mu)/info.s)) &lt; 1e-10);
+ 35  end
+ 36  fprintf(&#x27;TESTY: wszystkie sprawdzenia zakonczone poprawnie.\n&#x27;);
+ 37  end</pre><div class="page"></div><p class="HeadPL">Listing: run_project.m</p><pre>  1  function results = run_project
+  2  %RUN_PROJECT Wszystkie eksperymenty projektu MNUM 1.8.
+  3  % Uruchom: cd do folderu kod, nastepnie results=run_project.
+  4  % Solwery nie rysuja i nie wypisuja. Wszystkie wyniki trafiaja do ../wyniki.
+  5  root = fileparts(fileparts(mfilename(&#x27;fullpath&#x27;)));
+  6  out = fullfile(root,&#x27;wyniki&#x27;);
+  7  if ~exist(out,&#x27;dir&#x27;), mkdir(out); end
+  8  oldVisibility = get(groot,&#x27;defaultFigureVisible&#x27;);
+  9  cleanup = onCleanup(@() set(groot,&#x27;defaultFigureVisible&#x27;,oldVisibility));
+ 10  set(groot,&#x27;defaultFigureVisible&#x27;,&#x27;off&#x27;);
+ 11  test_solvers;
+ 12  ns = [50;100;250;500;1000;1500;2000];
+ 13  repeats = 3;
+ 14  delta = 1e-9;
+ 15  results.meta = struct(&#x27;matlab&#x27;,version,&#x27;computer&#x27;,computer, ...
+ 16      &#x27;timestamp&#x27;,char(datetime(&#x27;now&#x27;,&#x27;Format&#x27;,&#x27;yyyy-MM-dd HH:mm:ss&#x27;)), ...
+ 17      &#x27;eps&#x27;,eps,&#x27;repeats&#x27;,repeats,&#x27;delta&#x27;,delta, ...
+ 18      &#x27;timing&#x27;,&#x27;Median of external tic/toc; includes residual; excludes data and plots&#x27;);
+ 19  
+ 20  % Rozgrzewka JIT i bibliotek poza pomiarami.
+ 21  ldlt_solve([4,1;1,3],[1;2]);
+ 22  GS([4,1;1,3],[1;2],delta,2000);
+ 23  T1 = zeros(numel(ns),4);
+ 24  T2 = zeros(numel(ns),8);
+ 25  for q = 1:numel(ns)
+ 26      n = ns(q); i = (1:n).&#x27;;
+ 27  
+ 28      % Punkt 1: macierz pelna, czas zawiera faktoryzacje i reszte.
+ 29      A = 2*(i+i.&#x27;)+1;
+ 30      A(1:n+1:end) = 4*n^2+(2*i+4)*n;
+ 31      b = 2.5+0.6*i;
+ 32      elapsed = zeros(repeats,1);
+ 33      for rep = 1:repeats
+ 34          t = tic;
+ 35          [x,epsilon] = ldlt_solve(A,b);
+ 36          elapsed(rep) = toc(t);
+ 37      end
+ 38      T1(q,:) = [n,median(elapsed),epsilon,epsilon/norm(b)];
+ 39  
+ 40      % Punkt 2: obydwa solwery otrzymuja identyczne macierze PELNE.
+ 41      % Pozwala porownac algorytmy bez zmiany reprezentacji danych.
+ 42      A = 24.5*eye(n)+diag(-5*ones(n-3,1),3)+diag(-5*ones(n-3,1),-3);
+ 43      b = -6+0.5*i;
+ 44      td = zeros(repeats,1); tg = td; tgInternal = td;
+ 45      for rep = 1:repeats
+ 46          t = tic;
+ 47          [xd,ed] = ldlt_solve(A,b);
+ 48          td(rep) = toc(t);
+ 49          t = tic;
+ 50          [xg,k,tgInternal(rep)] = GS(A,b,delta,1000*n);
+ 51          eg = norm(A*xg-b,2);
+ 52          tg(rep) = toc(t);
+ 53      end
+ 54      T2(q,:) = [n,median(td),ed,median(tg),eg,k, ...
+ 55          median(tgInternal),norm(xd-xg,2)];
+ 56      fprintf(&#x27;n=%4d: LDLT(1) %.3fs; LDLT(2) %.3fs; GS %.3fs, k=%d\n&#x27;, ...
+ 57          n,T1(q,2),T2(q,2),T2(q,4),k);
+ 58  end
+ 59  results.task1 = array2table(T1,&#x27;VariableNames&#x27;, ...
+ 60      {&#x27;n&#x27;,&#x27;time_ldlt_s&#x27;,&#x27;residual_2&#x27;,&#x27;relative_residual_2&#x27;});
+ 61  results.task2 = array2table(T2,&#x27;VariableNames&#x27;, ...
+ 62      {&#x27;n&#x27;,&#x27;time_ldlt_s&#x27;,&#x27;residual_ldlt_2&#x27;,&#x27;time_gs_s&#x27;,&#x27;residual_gs_2&#x27;, ...
+ 63      &#x27;iterations_gs&#x27;,&#x27;time_gs_internal_s&#x27;,&#x27;difference_solutions_2&#x27;});
+ 64  writetable(results.task1,fullfile(out,&#x27;zadanie1.csv&#x27;));
+ 65  writetable(results.task2,fullfile(out,&#x27;zadanie2.csv&#x27;));</pre><div class="page"></div><p class="HeadPL">Listing: run_project.m (ciąg dalszy)</p><pre> 66  
+ 67  % Wykresy zadania 1.
+ 68  f = figure(&#x27;Position&#x27;,[100,100,1100,450]);
+ 69  tiledlayout(1,2);
+ 70  nexttile; loglog(ns,T1(:,2),&#x27;-o&#x27;,&#x27;LineWidth&#x27;,1.5); grid on;
+ 71  xlabel(&#x27;Liczba rownan n&#x27;); ylabel(&#x27;Czas [s]&#x27;); title(&#x27;Zadanie 1: LDL^T&#x27;);
+ 72  nexttile; loglog(ns,T1(:,3),&#x27;-o&#x27;,&#x27;LineWidth&#x27;,1.5); grid on;
+ 73  xlabel(&#x27;Liczba rownan n&#x27;); ylabel(&#x27;||Ax-b||_2&#x27;); title(&#x27;Reszta ukladu&#x27;);
+ 74  saveplot(f,out,&#x27;zadanie1&#x27;);
+ 75  
+ 76  % Wykresy zadania 2, w tym liczba iteracji GS.
+ 77  f = figure(&#x27;Position&#x27;,[100,100,1400,430]); tiledlayout(1,3);
+ 78  nexttile; loglog(ns,T2(:,2),&#x27;-o&#x27;,ns,T2(:,4),&#x27;-s&#x27;,&#x27;LineWidth&#x27;,1.5);
+ 79  grid on; xlabel(&#x27;n&#x27;); ylabel(&#x27;Czas [s]&#x27;); legend(&#x27;LDL^T&#x27;,&#x27;GS&#x27;,&#x27;Location&#x27;,&#x27;best&#x27;);
+ 80  title(&#x27;Zadanie 2: czasy&#x27;);
+ 81  nexttile; loglog(ns,T2(:,3),&#x27;-o&#x27;,ns,T2(:,5),&#x27;-s&#x27;,&#x27;LineWidth&#x27;,1.5);
+ 82  grid on; xlabel(&#x27;n&#x27;); ylabel(&#x27;||Ax-b||_2&#x27;); legend(&#x27;LDL^T&#x27;,&#x27;GS&#x27;,&#x27;Location&#x27;,&#x27;best&#x27;);
+ 83  title(&#x27;Reszty ukladu&#x27;);
+ 84  nexttile; plot(ns,T2(:,6),&#x27;-o&#x27;,&#x27;LineWidth&#x27;,1.5); grid on;
+ 85  xlabel(&#x27;n&#x27;); ylabel(&#x27;Liczba pelnych iteracji&#x27;); title(&#x27;Gauss-Seidel&#x27;);
+ 86  saveplot(f,out,&#x27;zadanie2&#x27;);
+ 87  
+ 88  % Punkt 3: dane i wszystkie wymagane stopnie.
+ 89  x = (-10:2:10).&#x27;;
+ 90  y = [-5.460;-3.880;-1.969;-1.666;-0.076;-0.397;-1.030; ...
+ 91      -4.548;-11.528;-21.641;-34.445];
+ 92  degrees = [3;5;7;9;10];
+ 93  xx = linspace(min(x),max(x),1001).&#x27;; % krok 0.02 zamiast 2: 100x gesciej
+ 94  approxRepeats = 201;
+ 95  T3 = zeros(10,10); coefficients = cell(10,2);
+ 96  for scaled = [false,true]
+ 97      f = figure(&#x27;Position&#x27;,[100,100,1300,750]); tiledlayout(2,3);
+ 98      for q = 1:numel(degrees)
+ 99          p = degrees(q); row = q+5*scaled;
+100          for method = {&#x27;normal&#x27;,&#x27;qr&#x27;}
+101              poly_lsq(x,y,p,method{1},scaled); % rozgrzewka
+102          end
+103          tn = zeros(approxRepeats,1); tq = tn;
+104          for rep = 1:approxRepeats
+105              % Naprzemienna kolejnosc zmniejsza systematyczny wplyw kolejnosci.
+106              if mod(rep,2)
+107                  t=tic; [an,en2,eni]=poly_lsq(x,y,p,&#x27;normal&#x27;,scaled); tn(rep)=toc(t);
+108                  t=tic; [aq,eq2,eqi]=poly_lsq(x,y,p,&#x27;qr&#x27;,scaled); tq(rep)=toc(t);
+109              else
+110                  t=tic; [aq,eq2,eqi]=poly_lsq(x,y,p,&#x27;qr&#x27;,scaled); tq(rep)=toc(t);
+111                  t=tic; [an,en2,eni]=poly_lsq(x,y,p,&#x27;normal&#x27;,scaled); tn(rep)=toc(t);
+112              end
+113          end
+114          tnodes=x;
+115          if scaled, tnodes=x/10; end
+116          V = tnodes .^ (p:-1:0);
+117          T3(row,:)=[p,scaled,median(tn),en2,eni,median(tq),eq2,eqi, ...
+118              cond(V,2),cond(V.&#x27;*V,2)];
+119          coefficients(row,:)={an,aq};
+120          nexttile; plot(x,y,&#x27;ko&#x27;,&#x27;MarkerFaceColor&#x27;,&#x27;k&#x27;); hold on;
+121          plot(xx,polyval(an,xx),&#x27;-&#x27;,xx,polyval(aq,xx),&#x27;--&#x27;,&#x27;LineWidth&#x27;,1.3);
+122          grid on; xlabel(&#x27;x&#x27;); ylabel(&#x27;y&#x27;); title(sprintf(&#x27;Stopien %d&#x27;,p));
+123          legend(&#x27;Dane&#x27;,&#x27;Normalne + LDL^T&#x27;,&#x27;QR&#x27;,&#x27;Location&#x27;,&#x27;best&#x27;);
+124      end
+125      nexttile; axis off;
+126      text(0,0.8,sprintf(&#x27;Skalowanie: %d\n11 probek danych\n1001 punktow krzywych&#x27;,scaled));
+127      saveplot(f,out,sprintf(&#x27;zadanie3_skala%d&#x27;,scaled));
+128  end
+129  results.task3=array2table(T3,&#x27;VariableNames&#x27;,{&#x27;degree&#x27;,&#x27;scaled&#x27;,&#x27;time_normal_s&#x27;, ...
+130      &#x27;error_normal_2&#x27;,&#x27;error_normal_inf&#x27;,&#x27;time_qr_s&#x27;,&#x27;error_qr_2&#x27;,&#x27;error_qr_inf&#x27;, ...</pre><div class="page"></div><p class="HeadPL">Listing: run_project.m (ciąg dalszy)</p><pre>131      &#x27;cond_V_2&#x27;,&#x27;cond_gram_computed_2&#x27;});
+132  results.coefficients=coefficients;
+133  results.x_data=x; results.y_data=y;
+134  results.meta.approx_repeats=approxRepeats;
+135  writetable(results.task3,fullfile(out,&#x27;zadanie3.csv&#x27;));
+136  fid=fopen(fullfile(out,&#x27;wspolczynniki.txt&#x27;),&#x27;w&#x27;,&#x27;n&#x27;,&#x27;UTF-8&#x27;);
+137  for row=1:10
+138      fprintf(fid,&#x27;p=%d, skala=%d; [a_p,...,a_0] w zmiennej x\n&#x27;,T3(row,1:2));
+139      fprintf(fid,&#x27;normal: &#x27;); fprintf(fid,&#x27;%.17g &#x27;,coefficients{row,1}); fprintf(fid,&#x27;\n&#x27;);
+140      fprintf(fid,&#x27;qr:     &#x27;); fprintf(fid,&#x27;%.17g &#x27;,coefficients{row,2}); 
+     fprintf(fid,&#x27;\n\n&#x27;);
+141  end
+142  fclose(fid);
+143  % Dodatkowe wykresy bledow i czasow MNK dla obu baz.
+144  f=figure(&#x27;Position&#x27;,[100,100,1100,800]); tiledlayout(2,2);
+145  for scaled=[false,true]
+146      rows=(1:5)+5*scaled;
+147      nexttile; semilogy(degrees,T3(rows,4),&#x27;-o&#x27;,degrees,T3(rows,7),&#x27;--s&#x27;);
+148      grid on; xlabel(&#x27;Stopien p&#x27;); ylabel(&#x27;||r||_2&#x27;);
+149      legend(&#x27;Normalne + LDL^T&#x27;,&#x27;QR&#x27;,&#x27;Location&#x27;,&#x27;best&#x27;); title(sprintf(&#x27;Bledy, 
+     skala=%d&#x27;,scaled));
+150      nexttile; plot(degrees,1e6*T3(rows,3),&#x27;-o&#x27;,degrees,1e6*T3(rows,6),&#x27;--s&#x27;);
+151      grid on; xlabel(&#x27;Stopien p&#x27;); ylabel(&#x27;Czas [us]&#x27;);
+152      legend(&#x27;Normalne + LDL^T&#x27;,&#x27;QR&#x27;,&#x27;Location&#x27;,&#x27;best&#x27;); title(sprintf(&#x27;Czasy, 
+     skala=%d&#x27;,scaled));
+153  end
+154  saveplot(f,out,&#x27;zadanie3_bledy_czasy&#x27;);
+155  save(fullfile(out,&#x27;wyniki.mat&#x27;),&#x27;results&#x27;);
+156  fid=fopen(fullfile(out,&#x27;wyniki.json&#x27;),&#x27;w&#x27;,&#x27;n&#x27;,&#x27;UTF-8&#x27;);
+157  json=struct(&#x27;meta&#x27;,results.meta,&#x27;task1&#x27;,table2struct(results.task1), ...
+158      &#x27;task2&#x27;,table2struct(results.task2),&#x27;task3&#x27;,table2struct(results.task3), ...
+159      &#x27;coefficients&#x27;,{coefficients});
+160  fprintf(fid,&#x27;%s&#x27;,jsonencode(json,&#x27;PrettyPrint&#x27;,true)); fclose(fid);
+161  disp(results.task1); disp(results.task2); disp(results.task3);
+162  fprintf(&#x27;Gotowe. Wyniki zapisano w: %s\n&#x27;,out);
+163  end
+164  
+165  function saveplot(f,out,name)
+166  exportgraphics(f,fullfile(out,[name,&#x27;.png&#x27;]),&#x27;Resolution&#x27;,180);
+167  close(f);
+168  end</pre></html>
